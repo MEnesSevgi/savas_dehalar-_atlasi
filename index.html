@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="en">
+
+  <head>
+    <meta charset="UTF-8">
+    <title>Savaş Dehaları Atlası</title>
+    
+
+  </head>
+    
+  <body>
+  <!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Savaş Dehaları Atlası</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Plus+Jakarta+Sans:wght@300;500;700&display=swap');
+        
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: #0a0705;
+        }
+        .gis-panel {
+            background: rgba(18, 13, 10, 0.8);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(245, 158, 11, 0.15);
+        }
+        .digital-clock {
+            font-family: 'Orbitron', sans-serif;
+        }
+        .leaflet-container {
+            background: #0f0b08 !important;
+        }
+        .leaflet-popup-content-wrapper, .leaflet-popup-tip {
+            background: rgba(18, 13, 10, 0.95) !important;
+            color: #f1f5f9 !important;
+            border: 1px solid rgba(245, 158, 11, 0.4);
+            backdrop-filter: blur(8px);
+        }
+        #live-time-panel, #wiki-panel {
+            position: relative;
+        }
+
+        /* Responsive Ayarlar */
+        @media (max-width: 768px) {
+            main {
+                flex-direction: column; /* Küçük ekranlarda dikey hizalama */
+            }
+            #sidebar {
+                width: 100%; /* Sidebar tam genişlikte olacak */
+                height: auto; /* Yükseklik otomatik ayarlanacak */
+            }
+            #map {
+                width: 100%; /* Harita tam genişlikte olacak */
+                height: 400px; /* Mobilde harita yüksekliğini artırdım */
+            }
+        }
+        @media (min-width: 768px) {
+            #sidebar {
+                width: 50%; /* Büyük ekranlarda yan yana %50 genişlik */
+                border-right: 1px solid rgba(245, 158, 11, 0.15);
+            }
+            #map {
+                width: 100%; /* Büyük ekranlarda yan yana %50 genişlik */
+                height: 100%; /* Harita yüksekliği tam olacak */
+            }
+        }
+    </style>
+</head>
+<body class="text-slate-200 h-screen flex flex-col justify-between overflow-hidden">
+
+    <header class="w-full px-6 py-3 flex justify-between items-center border-b border-orange-950/40 gis-panel z-50">
+        <h1 class="text-md font-bold text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-orange-500 digital-clock">
+            Savaş Dehaları Atlası
+        </h1>
+        <div class="text-xs text-slate-400 flex items-center space-x-4 font-mono">
+            <div>YEREL SİSTEM: <span id="system-time" class="text-amber-400 digital-clock">00:00:00</span></div>
+        </div>
+    </header>
+
+    <main class="flex-1 w-full flex items-stretch overflow-hidden">
+        
+        <section id="sidebar" class="w-full md:w-1/2 border-b md:border-b-0 md:border-r border-orange-950/30 p-4 flex flex-col justify-between gap-4 overflow-y-auto z-40 bg-[#0e0a07]">
+            <h2 class="text-sm font-bold tracking-widest text-slate-400 uppercase mb-3"></h2>
+            <select id="sehirSelect" onchange="sehirSecildi(this.value)" class="w-full p-3 rounded-lg bg-slate-900/80 border border-slate-800 text-sm text-slate-200 outline-none focus:border-amber-500 transition-all mb-4">
+                <option value="">Listeden seçim yapın. </option>
+            </select>
+            <div id="live-time-panel" class="w-full max-w-full p-4 rounded-xl bg-amber-950/20 border border-amber-500/20 mb-4 hidden">
+                <div class="flex justify-between items-center">
+                    <span id="selected-zone-name" class="text-sm font-bold text-slate-100">Haritacı Adı</span>
+                    <span id="selected-zone-clock" class="digital-clock text-xs font-bold text-amber-400 uppercase tracking-wider"></span>
+                </div>
+                <div class="text-[10px] mt-2 pt-2 border-t border-orange-950/50 text-slate-400 flex flex-col gap-1">
+                    <div class="flex justify-between"><span></span> <b id="selected-zone-string" class="font-mono text-slate-300 italic">--</b></div>
+                    <div class="flex justify-between"><span>Coğrafi Koordinat:</span> <b id="selected-zone-coords" class="font-mono text-slate-300">--</b></div>
+                </div>
+            </div>
+            <div id="wiki-panel" class="w-full flex-1 border-t border-orange-950/30 pt-3 overflow-y-auto text-xs line-height-relaxed text-slate-400"></div>
+        </section>
+
+        <section class="w-full md:w-1/2 flex flex-col relative">
+            <div id="map" class="w-full h-full"></div>
+        </section>
+    </main>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <script>
+        const haritacilar = [
+             {
+        "id": 1,
+        "name": "II. Ramses",
+        "region": "Mısır",
+        "note": "Tarihin ilk yazılı anlaşmasıyla biten Kadeş Savaşı'nda Hititlere karşı savaş arabası taktiklerini en üst düzeyde kullandı ve propaganda gücüyle ordusunun moralini hep zirvede tuttu.",
+        "lat": 30.5852,
+        "lng": 31.5204,
+        "wikiQuery": "II._Ramses"
+    },
+    {
+        "id": 2,
+        "name": "III. Thutmose",
+        "region": "Mısır",
+        "note": "Megiddo Savaşı'nda beklenmedik bir dağ geçidini kullanarak düşmanı gafil avladı ve 20 yıl boyunca savaşlarda büyük başarılar elde etti.",
+        "lat": 27.9403,
+        "lng": 30.6586,
+        "wikiQuery": "III. Thutmose"
+    },
+    {
+        "id": 3,
+        "name": "II. Kiros",
+        "region": "Pers",
+        "note": "Med, Lidya ve Babil imparatorluklarını yıkan stratejist. Kuşatılması imkansız denilen Babil'i, Fırat Nehri'nin yatağını değiştirerek nehir kapılarından fethetmiştir.",
+        "lat": 32.4279,
+        "lng": 53.6880,
+        "wikiQuery": "II. Kiros"
+    },
+    {
+        "id": 4,
+        "name": "Miltiades",
+        "region": "Atina",
+        "note": "Maraton Savaşı'nda (MÖ 490) sayıca çok üstün Pers ordusunu, merkez hattını zayıflatıp kanatları güçlü tutarak (kıskaç taktiği) imha etmiştir.",
+        "lat": 38.0833,
+        "lng": 23.7333,
+        "wikiQuery": "Genç Miltiades"
+    },
+    {
+        "id": 5,
+        "name": "Epaminondas",
+        "region": "Thebai",
+        "note": "Löktra Savaşı'nda (MÖ 371) yenilmez denilen Sparta ordusunu, askeri tarihte devrim yaratan \"Eğik Saf\" (Oblique Order) taktiğiyle darmadağın etmiştir.",
+        "lat": 38.5000,
+        "lng": 23.0000,
+        "wikiQuery": "Epaminondas"
+    },
+    {
+        "id": 6,
+        "name": "II. Filip",
+        "region": "Makedonya",
+        "note": "Oğlu İskender'e hazine gibi bir ordu bıraktı. Sarmısak adı verilen uzun mızrakları kullanan efsanevi Makedon Falanks sistemini ve profesyonel ordu yapısını icat etti.",
+        "lat": 40.6401,
+        "lng": 22.9444,
+        "wikiQuery": "II. Filip"
+    },
+    {
+        "id": 7,
+        "name": "Büyük İskender",
+        "region": "Makedonya",
+        "note": "Granikos, İssos ve Gaugamela savaşlarında devasa Pers ordularını, bizzat kendisinin yönettiği \"Yoldaş Süvarileri\" ile merkezden yararak bozguna uğrattı. Hiç savaş kaybetmedi.",
+        "lat": 41.0000,
+        "lng": 22.0000,
+        "wikiQuery": "Alexander_the_Great"
+    },
+    {
+        "id": 8,
+        "name": "Çandragupta Maurya",
+        "region": "Hindistan",
+        "note": "Büyük İskender'in geri çekilmesinin ardından Hindistan'ı birleştirdi. Savaş fillerini, casus ağlarını ve gerilla taktiklerini birleştirerek büyük bir askeri güç kurdu.",
+        "lat": 25.0000,
+        "lng": 85.0000,
+        "wikiQuery": "Chandragupta_Maurya"
+    },
+    {
+        "id": 9,
+        "name": "Hannibal Barca",
+        "region": "Kartaca",
+        "note": "Roma'nın kabusu. Cannaec Savaşında (MÖ 216), askeri tarihin en kusursuz çift taraflı kuşatma (hilal taktiği) örneğini sergileyerek kendisinden iki kat üstün Roma ordusunu yok etti.",
+        "lat": 41.5000,
+        "lng": 1.0000,
+        "wikiQuery": "Hannibal"
+    },
+    {
+        "id": 10,
+        "name": "Scipio Africanus",
+        "region": "Roma",
+        "note": "Hannibal'ı yenebilen tek deha. Zama Savaşı'nda (MÖ 202) Hannibal'ın savaş fillerini safları açarak boşa düşürmüş ve Kartaca taktiklerini onlara karşı kullanmıştır.",
+        "lat": 38.0000,
+        "lng": 9.0000,
+        "wikiQuery": "Scipio_Africanus"
+    },
+    {
+        "id": 11,
+        "name": "Jül Sezar",
+        "region": "Roma",
+        "note": "Olağanüstü lojistik hızı ve kuşatma mühendisliği uzmanı. Alesia Kuşatması'nda, hem içindeki düşmanı kuşatmak hem de dışarıdan gelen destek ordusunu engellemek için iç içe iki devasa duvar inşa etmiştir.",
+        "lat": 41.9028,
+        "lng": 12.4964,
+        "wikiQuery": "Julius_Caesar"
+    },
+    {
+        "id": 12,
+        "name": "Trajan",
+        "region": "Roma",
+        "note": "Roma İmparatorluğu'nu en geniş sınırlarına ulaştıran asker imparator. Daçya seferlerinde nehirler üzerine kurdurduğu devasa köprüler ve istihkam mühendisliğiyle bilinir.",
+        "lat": 45.0000,
+        "lng": 24.0000,
+        "wikiQuery": "Trajan"
+    },
+    {
+        "id": 13,
+        "name": "Halid bin Velid",
+        "region": "İslam Devleti",
+        "note": "\"Allah'ın Kılıcı\". Yermük Savaşı'nda Bizans'a karşı, Kadisiye öncesinde Sasanilere karşı savaşmıştır. Çölü bir manevra alanı olarak kullanma ve mobil süvari taktiklerinde ustaydı. Yaklaşık 100 savaşta hiç yenilmedi.",
+        "lat": 32.0000,
+        "lng": 38.0000,
+        "wikiQuery": "Halid bin Velid"
+    },
+    {
+        "id": 14,
+        "name": "Belisarius",
+        "region": "Bizans",
+        "note": "İmparator I. Justinianus'un en büyük generali. Çok kısıtlı kaynaklar ve az sayıda askerle Vandal ve Ostrogot krallıklarını yıktı. Savunma hatları ve psikolojik harpte uzmandı.",
+        "lat": 41.0000,
+        "lng": 20.0000,
+        "wikiQuery": "Belisarius"
+    },
+    {
+        "id": 15,
+        "name": "Mete Han",
+        "region": "Hun",
+        "note": "Askeri düzende Onlu Teşkilat sistemini kuran ve savaş alanında yön tayini ile emir komuta zincirini sağlayan ıslıklı oku icat eden deha.",
+        "lat": 42.0000,
+        "lng": 105.0000,
+        "wikiQuery": "Mete"
+    },
+    {
+        "id": 16,
+        "name": "Karl Martell",
+        "region": "Franklar",
+        "note": "Tours Savaşı'nda (732) Endülüs Emevi ordularını durdurarak Avrupa'nın çehresini değiştirdi. Ağır süvarilere karşı disiplinli bir piyade duvarı kurarak kazandı.",
+        "lat": 47.0000,
+        "lng": 0.0000,
+        "wikiQuery": "Charles_Martel"
+    },
+    {
+        "id": 17,
+        "name": "Alp Arslan",
+        "region": "Büyük Selçuklu",
+        "note": "Malazgirt Savaşı'nda (1071) Bizans'ın ağır zırhlı ordusunu, Türklerin geleneksel Turan taktiği (sahte geri çekilme ve pusu) ile imha ederek Anadolu'nun kapılarını açtı.",
+        "lat": 39.0000,
+        "lng": 42.0000,
+        "wikiQuery": "Alp_Arslan"
+    },
+    {
+        "id": 18,
+        "name": "Selahaddin Eyyubi",
+        "region": "Eyyubiler",
+        "note": "Hıttin Savaşı'nda (1187) Haçlı ordusunu su kaynaklarından mahrum bırakarak çölde kuşattı ve Kudüs'ü geri aldı. Lojistik yıpratma ve şövalyelik ahlakıyla tanınır.",
+        "lat": 32.0000,
+        "lng": 35.0000,
+        "wikiQuery": "Selahaddin Eyyubi"
+    },
+    {
+        "id": 19,
+        "name": "Cengiz Han",
+        "region": "Moğol",
+        "note": "Tarihin en büyük bitişik imparatorluğunu kurdu. Ordusunu tamamen liyakate dayalı, muazzam hızlı hareket edebilen atlı okçulardan oluşturdu. Psikolojik harp ve kuşatma teknolojilerini harmanladı.",
+        "lat": 41.0000,
+        "lng": 105.0000,
+        "wikiQuery": "Cengiz Han"
+    },
+    {
+        "id": 20,
+        "name": "Subutay",
+        "region": "Moğol",
+        "note": "Cengiz Han ve Ögeday'ın başgenerali. Birbirinden binlerce kilometre uzaktaki orduları aynı gün, aynı saatte koordineli şekilde saldırtabilen, tarihin en büyük stratejik planlamacılarından biri.",
+        "lat": 41.0000,
+        "lng": 105.0000,
+        "wikiQuery": "Subutay"
+    },
+    {
+        "id": 21,
+        "name": "Edward (Kara Prens)",
+        "region": "İngiltere",
+        "note": "Yüzyıl Savaşları'nda Crecy ve Poitiers savaşlarında, Fransız şövalyelerine karşı \"Longbow\" (İngiliz Uzun Yayı) kullanan okçuları stratejik konumlandırarak mutlak zaferler kazandı.",
+        "lat": 51.0000,
+        "lng": -1.0000,
+        "wikiQuery": "Edward (Kara Prens)"
+    },
+    {
+        "id": 22,
+        "name": "Jan Žižka",
+        "region": "Hussitler",
+        "note": "Kör olmasına rağmen hiç savaş kaybetmedi. Köylülerden oluşan ordusunu korumak için arabaları birer zırhlı kaleye dönüştürdü (Wagenburg taktiği). Barutu ve topu sahra savaşlarında mobil olarak kullanan ilk kişidir.",
+        "lat": 49.0000,
+        "lng": 15.0000,
+        "wikiQuery": "Jan_Žižka"
+    },
+    {
+        "id": 23,
+        "name": "Timur",
+        "region": "Emir Timur",
+        "note": "Ankara ve Terek savaşları dahil, ömrü boyunca girdiği hiçbir savaşı kaybetmeyen askeri dahi. Filleri saf dışı bırakma yöntemleri, ordusunu çok hızlı mobilize etmesi ve kusursuz istihbarat ağı ile bilinir.",
+        "lat": 39.0000,
+        "lng": 66.0000,
+        "wikiQuery": "Timur"
+    },
+    {
+        "id": 24,
+        "name": "Fatih Sultan Mehmed",
+        "region": "Osmanlı",
+        "note": "İstanbul'un fethinde (1453) havan toplarının balistik hesaplarını yaptı, gemileri karadan yürüterek psikolojik üstünlüğü ele geçirdi ve çağ açıp çağ kapattı. Ateşli silahlar ve mühendislik dehasıydı.",
+        "lat": 41.0082,
+        "lng": 28.9784,
+        "wikiQuery": "Fatih Sultan Mehmed"
+    },
+    {
+        "id": 25,
+        "name": "Yavuz Sultan Selim",
+        "region": "Osmanlı",
+        "note": "Çaldıran (1514) ve Mercidabık savaşlarında, ateşli silahları (tüfekli yeniçeriler ve toplar) lojistik bir dehayla birleştirerek çöller üzerinden ordusunu kayıpsız yürüttü.",
+        "lat": 38.0000,
+        "lng": 44.0000,
+        "wikiQuery": "Selim_I"
+    },
+    {
+        "id": 26,
+        "name": "Kanuni Sultan Süleyman",
+        "region": "Osmanlı",
+        "note": "Mohaç Meydan Muharebesi'ni (1526) sadece iki saat gibi kısa bir sürede, sahte geri çekilme ve topçu bataryalarının ölümcül çapraz ateşiyle kazandı.",
+        "lat": 45.0000,
+        "lng": 18.0000,
+        "wikiQuery": "Suleiman_the_Magnificent"
+    },
+    {
+        "id": 27,
+        "name": "Oda Nobunaga",
+        "region": "Japonya",
+        "note": "Nagashino Savaşı'nda (1575) efsanevi samuray süvarilerine karşı arkebüz (ilkel tüfek) kullanan askerleri üç sıra halinde dizerek kesintisiz ateş gücü (salvo ateşi) sağladı ve Japonya'yı birleştirdi.",
+        "lat": 35.0000,
+        "lng": 136.0000,
+        "wikiQuery": "Oda_Nobunaga"
+    },
+    {
+        "id": 28,
+        "name": "Yi Sun-sin",
+        "region": "Kore",
+        "note": "Myeongnyang Savaşı'nda Japonların 133 gemilik devasa donanmasını sadece 13 gemiyle, deniz akıntılarını hesaplayarak ve \"Kaplumbağa Gemiler\" (Geobukseon) ile yok eden efsanevi amiral.",
+        "lat": 35.0000,
+        "lng": 126.0000,
+        "wikiQuery": "Yi_Sun-sin"
+    },
+    {
+        "id": 29,
+        "name": "Gustav II. Adolf",
+        "region": "İsveç",
+        "note": "\"Modern Savaşın Babası\". Otuz Yıl Savaşları'nda piyade, süvari ve topçu birliklerini tarihte ilk kez kombine bir şekilde (kombine kollar) esnek ve hızlı bir yapıda kullandı.",
+        "lat": 60.0000,
+        "lng": 15.0000,
+        "wikiQuery": "Gustavus_Adolphus"
+    },
+    {
+        "id": 30,
+        "name": "Henri de La Tour d'Auvergne, Viscount of Turenne",
+        "region": "Fransa",
+        "note": "XIV. Louis dönemi generali. Napolyon'un \"taktiklerini ezberleyin\" dediği birkaç komutandan biri. Manevra savaşı ve düşmanın lojistik hatlarını kesme konusunda ustaydı.",
+        "lat": 48.0000,
+        "lng": 2.0000,
+        "wikiQuery": "Henri de La Tour d'Auvergne, Viscount of Turenne"
+    },
+    {
+        "id": 31,
+        "name": "Marlborough Dükü",
+        "region": "İngiltere",
+        "note": "İspanya Veraset Savaşları'nda (Blenheim Savaşı) Fransız ordularının yenilmezlik efsanesine son verdi. Çok uluslu orduları yönetme ve aldatma taktiklerinde uzmandı.",
+        "lat": 51.0000,
+        "lng": -1.0000,
+        "wikiQuery": "John_Churchill"
+    },
+    {
+        "id": 32,
+        "name": "Eugen von Savoyen",
+        "region": "Avusturya",
+        "note": "Osmanlı ordularını Zenta'da (1697) nehir geçişi sırasında yakalayarak yenen, askeri hızı ve ani baskınları kullanan prens.",
+        "lat": 47.0000,
+        "lng": 20.0000,
+        "wikiQuery": "Eugen (Savoy prensi)"
+    },
+           {
+       "id": 33,
+        "name": "II. Friedrich",
+        "region": "Büyük Friedrich - Prusya",
+        "note": "Leuthen Savaşı'nda kendisinden iki kat üstün Avusturya ordusunu, antik \"Eğik Saf\" taktiğini modern Prusya disipliniyle birleştirerek yendi. Askeri lojistik ve hız konusunda başarılıydı.",
+        "lat": 51.0000,
+        "lng": 13.0000,
+        "wikiQuery": "II. Friedrich"
+    },
+    {
+        "id": 34,
+        "name": "Napolyon Bonapart",
+        "region": "Fransa",
+        "note": "Tarihin en büyük askeri zekalarından biri. Austerlitz Savaşı'nda düşmanı zayıf göründüğü merkez hattına çekip ardından Pratzen Tepeleri'ni ele geçirerek mükemmel bir zafer kazandı. \"İç Hatlar Stratejisi\" ile düşman ordularını birleşmeden tek tek avlardı.",
+        "lat": 43.0000,
+        "lng": 1.0000,
+        "wikiQuery": "Napoleon"
+    },
+    {
+        "id": 35,
+        "name": "Arthur Wellesley",
+        "region": "Wellington Dükü - İngiltere",
+        "note": "Napolyon'u Waterloo'da (1815) yenen komutan. Savunma pozisyonlarında, özellikle askerlerini tepelerin arkasına saklayarak düşman topçusundan koruma (Ters Yamaç Stratejisi) konusunda uzmandı.",
+        "lat": 51.0000,
+        "lng": -1.0000,
+        "wikiQuery": "Arthur_Wellesley,_1st_Duke_of_Wellington"
+    },
+    {
+        "id": 36,
+        "name": "Mihail Kutuzov",
+        "region": "Rusya",
+        "note": "Napolyon'un Rusya seferinde (1812) devasa Fransız ordusuna karşı \"Yıpratma savaşı\" ve \"Yakılmış Toprak\" taktiğini uygulayarak Napolyon'u savaşmadan, kışa ve açlığa mahkum ederek bitirdi.",
+        "lat": 55.0000,
+        "lng": 37.0000,
+        "wikiQuery": "Mihail Kutuzov"
+    },
+    {
+        "id": 37,
+        "name": "Şamil",
+        "region": "Kafkasya",
+        "note": "Rus İmparatorluğu'na karşı çeyrek asır boyunca gerilla ve gayrinizami harp taktikleriyle direndi. Dağlık araziyi, ani baskınları ve esnek savunmayı mükemmel uyguladı.",
+        "lat": 42.0000,
+        "lng": 46.0000,
+        "wikiQuery": "Şeyh Şamil"
+    },
+    {
+        "id": 38,
+        "name": "Robert E. Lee",
+        "region": "Konfederasyon - ABD",
+        "note": "Amerikan İç Savaşı'nda Güney'in kısıtlı imkanlarına rağmen, Chancellorsville gibi savaşlarda sayıca iki kat üstün Kuzey ordularını cesur bölme ve kuşatma taktikleriyle mağlup etti.",
+        "lat": 37.0000,
+        "lng": -78.0000,
+        "wikiQuery": "Robert_E._Lee"
+    },
+    {
+        "id": 39,
+        "name": "Ulysses S. Grant",
+        "region": "Birlik - ABD",
+        "note": "Robert E. Lee'yi mağlup eden general. Toplam savaş (Total War) kavramını uygulayarak düşmanın sadece ordusunu değil, ekonomik ve lojistik altyapısını da yok etmeye odaklandı.",
+        "lat": 40.0000,
+        "lng": -89.0000,
+        "wikiQuery": "Ulysses_S._Grant"
+    },
+    {
+        "id": 40,
+        "name": "Helmuth von Moltke",
+        "region": "Yaşlı Moltke - Prusya",
+        "note": "Demiryolları ve telgrafı askeri harekata entegre eden ilk deha. \"Ayrı yürü, birlikte savaş\" doktriniyle Sedan Savaşı'nda (1870) Fransızları kuşatıp esir aldı.",
+        "lat": 52.0000,
+        "lng": 13.0000,
+        "wikiQuery": "Helmuth von Moltke"
+    },
+    {
+        "id": 41,
+        "name": "Paul von Hindenburg",
+        "region": "Almanya",
+        "note": "I. Dünya Savaşı'nda, Tannenberg Savaşı'nda (1914) iki devasa Rus ordusunun birbiriyle olan zayıf iletişimini telsiz istihbaratıyla çözüp, iç hat manevrasıyla Rusları tamamen imha ettiler.",
+        "lat": 52.0000,
+        "lng": 20.0000,
+        "wikiQuery": "Paul_von_Hindenburg"
+    },
+    {
+        "id": 42,
+        "name": "Mustafa Kemal Atatürk",
+        "region": "Türkiye",
+        "note": "1921'de Sakarya Meydan Muharebesi sırasında \"Hattı müdafaa yoktur, sathı müdafaa vardır. O satıh bütün vatandır\" diyerek askeri literatüre yeni bir savunma doktrini kazandırdı.",
+        "lat": 39.9334,
+        "lng": 32.8597,
+        "wikiQuery": "Mustafa_Kemal_Atatürk"
+    },
+    {
+        "id": 43,
+        "name": "Heinz Guderian",
+        "region": "Almanya",
+        "note": "\"Blitzkrieg (Yıldırım Savaşı)\" doktrininin mimarı. Tankları piyadeden bağımsız, radyo iletişimiyle koordine olan hızlı zırhlı tümenler halinde kullanarak Fransa'yı haftalar içinde düşürdü.",
+        "lat": 52.0000,
+        "lng": 10.0000,
+        "wikiQuery": "Heinz_Guderian"
+    },
+    {
+        "id": 44,
+        "name": "Erwin Rommel",
+        "region": "Çöl Tilkisi - Almanya",
+        "note": "Kuzey Afrika cephesinde, çok kısıtlı lojistik destek ve az sayıda tankla, hızı ve hileleriyle(sahte tanklar, gizlenmiş 88'lik uçaksavar topları) tanınır.",
+        "lat": 32.0000,
+        "lng": 20.0000,
+        "wikiQuery": "Erwin_Rommel"
+    },
+    {
+        "id": 45,
+        "name": "Erich von Manstein",
+        "region": "Almanya",
+        "note": "Fransa'nın işgali için efsanevi Ardenler taarruz planını (Sichelschnitt) yaptı. İkinci Harkov Savaşı'nda (1943) geri çekilen ordusuyla ani bir karşı taarruz yaparak (\"Arka El Darbesi\") devasa Sovyet güçlerini yok etti.",
+        "lat": 52.0000,
+        "lng": 10.0000,
+        "wikiQuery": "Erich_von_Manstein"
+    },
+    {
+        "id": 46,
+        "name": "Georgi Jukov",
+        "region": "Sovyetler Birliği",
+        "note": "II. Dünya Savaşı'nın en büyük generallerinden. Stalingrad'da mihver ordularını kuşatan Uranüs Harekâtı'nı yönetti. Muazzam bir lojistik gizlilikle milyonluk orduları kaydırabilme ve sert yıpratma savaşı uzmanıydı.",
+        "lat": 56.0000,
+        "lng": 38.0000,
+        "wikiQuery": "Georgy_Zhukov"
+    },
+    {
+        "id": 47,
+        "name": "George S. Patton",
+        "region": "ABD",
+        "note": "Müttefiklerin en agresif ve başarılı zırhlı birlik komutanı. Bulge (Ardenler) Savaşı'nda ordusunun yönünü kış şartlarında sadece 72 saatte değiştirerek kuşatılan Amerikan birliklerini kurtardı.",
+        "lat": 39.0000,
+        "lng": -77.0000,
+        "wikiQuery": "George_S._Patton"
+    },
+    {
+        "id": 48,
+        "name": "Isoroku Yamamoto",
+        "region": "Japonya",
+        "note": "Pearl Harbor baskınını planlayan kişidir. Deniz savaşlarında zırhlı gemilerin devrinin bittiğini, geleceğin Uçak Gemilerinde olduğunu dünyada ilk kavrayan amirallerdendir.",
+        "lat": 35.0000,
+        "lng": 138.0000,
+        "wikiQuery": "Isoroku_Yamamoto"
+    },
+    {
+        "id": 49,
+        "name": "Vo Nguyen Giap",
+        "region": "Vietnam",
+        "note": "Önce Fransızları Dien Bien Phu'da (1954) ağır topları dağların tepelerine insan gücüyle taşıyarak yendi; ardından ABD'yi gerilla savaşı, tünel sistemleri ve lojistik bir şaheser olan Ho Chi Minh Patikası ile pes ettirdi.",
+        "lat": 21.0000,
+        "lng": 105.0000,
+        "wikiQuery": "Vo_Nguyen_Giap"
+    },
+    {
+        "id": 50,
+        "name": "Douglas MacArthur",
+        "region": "ABD",
+        "note": "Pasifik Savaşı'nda Japon tahkimatlarını atlayarak sadece zayıf halkaları vuran \"Adadan Adaya Atlama\" (Island Hopping) stratejisini uyguladı. Kore Savaşı'nda ise imkansız görülen Incheon Çıkarması ile savaşın seyrini bir günde değiştirdi.",
+        "lat": 37.0000,
+        "lng": 126.0000,
+        "wikiQuery": "Douglas_MacArthur"
+    },
+        ];
+
+        let harita;
+        let markerlar = [];
+        const systemTimeEl = document.getElementById('system-time');
+
+        function haritayiKur() {
+            harita = L.map('map').setView([20.0, 0.0], 2);
+           L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap'
+            }).addTo(harita);
+
+            pinleriOlustur();
+            selectListesiniDoldur();
+
+            setInterval(zamanMotoru, 1000);
+            zamanMotoru();
+        }
+
+        function pinleriOlustur() {
+            markerlar.forEach(m => harita.removeLayer(m));
+            markerlar = [];
+
+            haritacilar.forEach(haritaci => {
+                const marker = L.marker([haritaci.lat, haritaci.lng]).addTo(harita);
+                marker.bindPopup(`<b>${haritaci.name}</b><br><span> ${haritaci.region}</span><br><span>Not: ${haritaci.note}</span>`);
+                marker.haritaciData = haritaci;
+                
+                marker.on('click', () => {
+                    document.getElementById('sehirSelect').value = haritaci.id;
+                    merkezOdakla(haritaci);
+                });
+
+                markerlar.push(marker);
+            });
+        }
+
+        function zamanMotoru() {
+            const globalNow = new Date();
+            systemTimeEl.textContent = globalNow.toLocaleTimeString('tr-TR');
+        }
+
+        function merkezOdakla(haritaci) {
+            document.getElementById('live-time-panel').classList.remove('hidden');
+            document.getElementById('selected-zone-name').textContent = haritaci.name;
+            document.getElementById('selected-zone-string').textContent = haritaci.zone;
+            document.getElementById('selected-zone-coords').textContent = `${haritaci.lat.toFixed(4)}, ${haritaci.lng.toFixed(4)}`;
+
+            wikiVerisiGetir(haritaci.wikiQuery, haritaci.name, haritaci.region);
+        }
+
+        function sehirSecildi(id) {
+            if (!id) return;
+            const secilen = haritacilar.find(h => h.id == id);
+            if (secilen) {
+                harita.setView([secilen.lat, secilen.lng], 5);
+                const marker = markerlar.find(m => m.haritaciData.id == id);
+                if (marker) marker.openPopup();
+                merkezOdakla(secilen);
+            }
+        }
+
+        function selectListesiniDoldur() {
+            const selectEl = document.getElementById('sehirSelect');
+            selectEl.innerHTML = '<option value="">Listeden bir kişi seçin.</option>';
+            
+            haritacilar.forEach(haritaci => {
+                const opt = document.createElement('option');
+                opt.value = haritaci.id;
+                opt.textContent = `${haritaci.name} (${haritaci.region})`;
+                selectEl.appendChild(opt);
+            });
+        }
+
+        // Metni Türkçe'ye çeviren yardımcı fonksiyon (MyMemory Translation API)
+        async function turkceyeCevir(text) {
+            try {
+                const response = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=en|tr`);
+                if (!response.ok) return text;
+                const data = await response.json();
+                return data.responseData.translatedText || text;
+            } catch (error) {
+                console.error("Çeviri hatası:", error);
+                return text; // Hata durumunda orijinal İngilizce metni döndür
+            }
+        }
+
+        async function wikiVerisiGetir(query, name, region) {
+            const panel = document.getElementById('wiki-panel');
+            panel.innerHTML = `<p class="animate-pulse">Veriler Alınıyor...</p>`;
+            
+            const urlTr = `https://tr.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(query)}`;
+            const urlEn = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(query)}`;
+
+            try {
+                let response = await fetch(urlTr);
+                let isTranslated = false;
+                
+                // Eğer Türkçe Wikipedia'da bulunamazsa İngilizceye istek at
+                if (!response.ok) {
+                    response = await fetch(urlEn);
+                    if (!response.ok) throw new Error("İki dilde de bilgi bulunamadı.");
+                    isTranslated = true;
+                }
+
+                const data = await response.json();
+
+                if (data.extract) {
+                    let textContent = data.extract;
+                    
+                    // Eğer veri İngilizce Wikipedia'dan geldiyse içeriği çevir
+                    if (isTranslated) {
+                        panel.innerHTML = `<p class="animate-pulse">Türkçe veri bulunamadı, İngilizce içerik Türkçe'ye çevriliyor...</p>`;
+                        textContent = await turkceyeCevir(data.extract);
+                    }
+
+                    panel.innerHTML = `
+                        <h3 class="text-sm font-bold text-amber-400 mb-1">${name}</h3>
+                        <span class="text-[10px] text-slate-500 block mb-2">  ${region} ${isTranslated ? '(İngilizce\'den Çevrildi)' : ''}</span>
+                        <p class="text-slate-300 leading-relaxed">${textContent}</p>
+                        ${data.thumbnail ? `<img src="${data.thumbnail.source}" class="w-full rounded-lg mt-3 max-h-48 object-cover border border-orange-950/30"/>` : ''}
+                        <a href="${data.content_urls.desktop.page}" target="_blank" class="text-amber-500 hover:underline mt-3 inline-block font-medium">Detaylar (Wikipedia) →</a>
+                    `;
+                } else {
+                    panel.innerHTML = `<h3>${name}</h3><span>  ${region}</span><p>Detaylar şu anda çekilemedi.</p>`;
+                }
+
+            } catch (error) {
+                console.error("Veri çekme hatası:", error);
+                panel.innerHTML = `
+                    <h3>${name}</h3>
+                    <span> ${region}</span>
+                    <p class="text-red-400/80">Detaylar şu anda çekilemedi veya haritacı bulunamadı.</p>
+                `;
+            }
+        }
+
+        window.onload = haritayiKur;
+    </script>
+</body>
+</html>
+    
+  </body>
+  
+</html>
